@@ -1,0 +1,157 @@
+{
+  "api_key": "IVY26-F874B625E451",
+  "candidate": {
+    "name": "Manpreet Kaur",
+    "email": "manpreet.20233180@mnnit.ac.in",
+    "repo_url": "https://github.com/kaurpreetman/api-truth-seeker",
+    "demo_url": ""
+  },
+  "answers": {
+    "total_listing_records": 3350,
+    "unique_properties": 3349,
+    "active_listings": 2671,
+    "corrupt_listing_ids": [
+      "100-6001461",
+      "100-6002071",
+      "DWE-6002663",
+      "MAG-6000631",
+      "SQU-6003044",
+      "ZER-6000669"
+    ],
+    "total_monthly_rent": 4328000,
+    "avg_price_per_sqft_2bhk": 26049.72,
+    "costliest_project": {
+      "project_id": "P60090",
+      "price_max_inr": 989000000
+    },
+    "listings_last_7_days": 123,
+    "fake_listing_ids": [
+      "100-6000114",
+      "100-6000439",
+      "100-6001126",
+      "100-6003373",
+      "DWE-6000766",
+      "SQU-6000571",
+      "SQU-6001428",
+      "SQU-6001536",
+      "ZER-6000608",
+      "ZER-6000998",
+      "ZER-6001173",
+      "ZER-6001757",
+      "ZER-6002438",
+      "ZER-6002881",
+      "ZER-6003105"
+    ],
+    "projects_with_wrong_listing_count": 301
+  },
+  "findings": [
+    {
+      "endpoint": "*",
+      "category": "auth",
+      "documented": "The API key is appended as the api_key query parameter.",
+      "actual": "Requests required the X-API-Key header; query-only requests returned 401.",
+      "how_found": "Compared an authenticated request using the documented query parameter with one using X-API-Key.",
+      "impact": "The frontend proxy sends both forms, with the header required by the observed service.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/auth/login",
+      "category": "auth",
+      "documented": "The response contains token, expires_in 86400, and there is no refresh flow.",
+      "actual": "The response contains access_token, refresh_token, expires_in 900, and refresh_url /auth/refresh.",
+      "how_found": "Logged in with each live demo credential contract and inspected the response body.",
+      "impact": "The client persists the session and refreshes it when the access token expires.",
+      "evidence": []
+    },
+    {
+      "endpoint": "*",
+      "category": "pagination",
+      "documented": "Collections use page and page_size.",
+      "actual": "Collections use limit and offset and return count and has_more.",
+      "how_found": "Requested the first collection page and followed the returned offsets until has_more was false.",
+      "impact": "The client pages by offset and retrieves all records before applying local verification filters.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listing/{id}",
+      "category": "missing_endpoint",
+      "documented": "A singular /v1/listing/{listing_id} detail endpoint exists.",
+      "actual": "The singular path returned 404; /v1/listings/{listing_id} returned the listing.",
+      "how_found": "Requested both documented and plural detail paths for the same listing ID.",
+      "impact": "The dynamic detail route calls the plural path.",
+      "evidence": ["100-6000047"]
+    },
+    {
+      "endpoint": "/v1/favourites",
+      "category": "missing_endpoint",
+      "documented": "Saved listings are listed and mutated through /v1/favourites.",
+      "actual": "The documented path returned 404; /v1/saved supports the live saved-listing flow.",
+      "how_found": "Called both paths while authenticated.",
+      "impact": "The frontend uses /v1/saved.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/analytics/summary",
+      "category": "missing_endpoint",
+      "documented": "A pre-computed analytics summary is available.",
+      "actual": "The endpoint returned 404.",
+      "how_found": "Called the endpoint while authenticated and checked the useful error body.",
+      "impact": "The Insights screen shows the error and runs a live listing-quality scan instead.",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "units",
+      "documented": "price_min and price_max are in rupees.",
+      "actual": "Observed values such as 98.9, which behave as crore-valued prices; P60090 corresponds to INR 989000000.",
+      "how_found": "Compared project price fields with listing rupee values and the magnitude of the project data.",
+      "impact": "The UI displays project prices as crore values and converts the costliest project for submission.",
+      "evidence": ["P60090", "P60001"]
+    },
+    {
+      "endpoint": "/v1/listings/{id}",
+      "category": "duplicates",
+      "documented": "Every listing ID corresponds to exactly one distinct physical property.",
+      "actual": "Two records have the same normalized property name, locality, bedroom count, price, and carpet area.",
+      "how_found": "Paged all listings and grouped normalized property signatures.",
+      "impact": "The answer counts this pair as one distinct property.",
+      "evidence": ["DWE-6003109", "MAG-6000909"]
+    },
+    {
+      "endpoint": "/v1/listings/{id}",
+      "category": "data_quality",
+      "documented": "Listings contain rupee prices for real properties.",
+      "actual": "Six listings have negative prices.",
+      "how_found": "Paged all listings and checked price and area invariants.",
+      "impact": "They are excluded from the 2BHK price-per-square-foot calculation.",
+      "evidence": ["100-6001461", "100-6002071", "DWE-6002663", "MAG-6000631", "SQU-6003044", "ZER-6000669"]
+    },
+    {
+      "endpoint": "/v1/listings/{id}",
+      "category": "fraud",
+      "documented": "Listing descriptions are seller text for listings safe to show.",
+      "actual": "Fifteen records contain the same instruction to pay a booking amount before a site visit, consistent with enquiry-generation records.",
+      "how_found": "Paged all listings and searched descriptions for the repeated booking-gated site-visit pattern.",
+      "impact": "These records are excluded from the 2BHK price-per-square-foot calculation.",
+      "evidence": ["100-6000114", "100-6000439", "100-6001126", "100-6003373", "DWE-6000766", "SQU-6000571", "SQU-6001428", "SQU-6001536", "ZER-6000608", "ZER-6000998", "ZER-6001173", "ZER-6001757", "ZER-6002438", "ZER-6002881", "ZER-6003105"]
+    },
+    {
+      "endpoint": "/v1/listings/{id}",
+      "category": "timestamps",
+      "documented": "All timestamps are UTC with a Z suffix.",
+      "actual": "Sale listing timestamps are served without an explicit timezone while rental timestamps include Z; interpreting naive sale timestamps as Gurgaon wall-clock time gives 123 records in the reference interval, versus 107 if treated as UTC.",
+      "how_found": "Inspected timestamp fields across sale and rental collections and compared both interpretations at the fixed reference moment.",
+      "impact": "The submission uses the observed Gurgaon/IST wall-clock interpretation.",
+      "evidence": ["100-6000047"]
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "consistency",
+      "documented": "total_listings always agrees with listings returned for the project.",
+      "actual": "301 of 400 project counts disagree with grouped listing records.",
+      "how_found": "Paged all projects and listings, grouped listings by project_id, and compared counts.",
+      "impact": "The mismatch count is reported separately and project cards display the API field as served.",
+      "evidence": ["P60001", "P60002", "P60004", "P60005", "P60006"]
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 export type IvySession = {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string | undefined;
   email: string;
+  expiresAt?: number | undefined;
 };
 
 export type Listing = {
@@ -22,6 +23,7 @@ export type Listing = {
   price: number;
   carpet_area: number;
   super_built_up_area?: number;
+  super_builtup_area?: number;
   latitude: number;
   longitude: number;
   posted_by: string;
@@ -73,13 +75,15 @@ export type Collection<T> = {
 };
 
 const SESSION_KEY = "ivy-homes-session";
+const PAGE_SIZE = 100;
 
 export function readStoredSession(): IvySession | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(SESSION_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as IvySession;
+    const session = JSON.parse(raw) as IvySession;
+    return session.accessToken && session.email ? session : null;
   } catch {
     window.localStorage.removeItem(SESSION_KEY);
     return null;
@@ -91,11 +95,13 @@ export function storeSession(session: IvySession) {
 }
 
 export function clearStoredSession() {
-  window.localStorage.removeItem(SESSION_KEY);
+  if (typeof window !== "undefined") window.localStorage.removeItem(SESSION_KEY);
 }
 
 async function readResponse<T>(response: Response): Promise<T> {
-  const payload = (await response.json().catch(() => ({ detail: "Unexpected response from the property service." }))) as T & {
+  const payload = (await response
+    .json()
+    .catch(() => ({ detail: "Unexpected response from the property service." }))) as T & {
     detail?: string;
   };
   if (!response.ok) throw new Error(payload.detail ?? `Request failed (${response.status})`);
@@ -103,20 +109,43 @@ async function readResponse<T>(response: Response): Promise<T> {
 }
 
 export async function ivyRequest<T>(path: string, session: IvySession, init?: RequestInit) {
-  const request = (activeSession: IvySession) => fetch(`/api/ivy${path}`, {
-    ...init,
-    headers: {
-      ...(init?.headers ?? {}),
-      Authorization: `Bearer ${activeSession.accessToken}`,
-      "Content-Type": "application/json",
-    },
-  });
+  const request = (activeSession: IvySession) =>
+    fetch(`/api/ivy${path}`, {
+      ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        Authorization: `Bearer ${activeSession.accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
   let response = await request(session);
   if (response.status === 401 && session.refreshToken) {
     const nextSession = await refresh(session);
     response = await request(nextSession);
   }
-  return readResponse<T>(response);
+  try {
+    return await readResponse<T>(response);
+  } catch (reason) {
+    if (response.status === 401) clearStoredSession();
+    throw reason;
+  }
+}
+
+export async function fetchAll<T>(path: string, session: IvySession, params?: URLSearchParams) {
+  const query = new URLSearchParams(params);
+  query.set("limit", String(PAGE_SIZE));
+  query.set("offset", "0");
+  const first = await ivyRequest<Collection<T>>(`${path}?${query}`, session);
+  const results = [...first.results];
+  let offset = first.offset + first.count;
+  while (first.has_more && results.length < first.total) {
+    query.set("offset", String(offset));
+    const next = await ivyRequest<Collection<T>>(`${path}?${query}`, session);
+    results.push(...next.results);
+    offset += next.count;
+    if (!next.has_more || next.count === 0) break;
+  }
+  return { ...first, count: results.length, results, has_more: false };
 }
 
 export async function login(email: string, password: string) {
@@ -125,20 +154,41 @@ export async function login(email: string, password: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  const payload = await readResponse<{ access_token: string; refresh_token: string; user: { email: string } }>(response);
-  const session = { accessToken: payload.access_token, refreshToken: payload.refresh_token, email: payload.user.email };
+  const payload = await readResponse<{
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+    user?: { email: string };
+  }>(response);
+  const session = {
+    accessToken: payload.access_token,
+    refreshToken: payload.refresh_token,
+    email: payload.user?.email ?? email,
+    expiresAt: payload.expires_in ? Date.now() + payload.expires_in * 1000 : undefined,
+  };
   storeSession(session);
   return session;
 }
 
 export async function refresh(session: IvySession) {
+  if (!session.refreshToken) throw new Error("Your session has expired. Please sign in again.");
   const response = await fetch("/api/ivy/auth/refresh", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: session.refreshToken }),
   });
-  const payload = await readResponse<{ access_token: string; refresh_token: string; user: { email: string } }>(response);
-  const nextSession = { accessToken: payload.access_token, refreshToken: payload.refresh_token, email: payload.user.email };
+  const payload = await readResponse<{
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+    user?: { email: string };
+  }>(response);
+  const nextSession = {
+    accessToken: payload.access_token,
+    refreshToken: payload.refresh_token ?? session.refreshToken,
+    email: payload.user?.email ?? session.email,
+    expiresAt: payload.expires_in ? Date.now() + payload.expires_in * 1000 : undefined,
+  };
   storeSession(nextSession);
   return nextSession;
 }
@@ -161,9 +211,13 @@ export function titleCase(value: string) {
 }
 
 export function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 export function initials(email: string) {
-  return email.split("@")[0].slice(0, 2).toUpperCase();
+  return (email.split("@")[0] ?? email).slice(0, 2).toUpperCase();
 }

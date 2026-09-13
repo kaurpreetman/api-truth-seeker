@@ -1,5 +1,44 @@
 # Property Insight Hub
 
+## Running the frontend
+
+```powershell
+npm install
+$env:IVY_API_KEY = "your-issued-key"
+npm run dev
+```
+
+The app runs through a server-side `/api/ivy` proxy so the API key is never
+sent from browser code. For local development, put the issued key in an
+ignored `.env.local` file as `IVY_API_KEY=...`. Sign in with any of the three
+demo accounts and the shared password from the assignment email.
+
+## Implementation and audit notes
+
+The client uses one typed API module, persists the Ivy session in local storage,
+refreshes access tokens when the live service returns 401, and follows the
+observed `limit`/`offset`/`has_more` pagination contract until all records are
+retrieved. Listing filters are applied again on the client so the displayed
+results do not depend on undocumented server-side filter behavior. Rentals and
+projects use their observed price units: rental `price` is monthly rent and
+project prices are crore-valued numbers despite the reference claiming rupees.
+
+The live API differed from the reference in authentication headers, token
+expiry and refresh behavior, detail and saved-listing paths, analytics
+availability, pagination, timestamps, project counts, duplicate-looking
+records, negative prices, and booking-gated fake listings. These reproduced
+findings and the computed answers are recorded in `submission.json`.
+
+Checks that turned out to be fine included the locality, BHK, furnishing, and
+price listing filters: each changed the returned result set and totals when
+tested against an unfiltered request. The collection metadata also accurately
+reported the observed offset, count, total, and continuation state.
+
+With another two days, I would add automated contract tests against captured
+API fixtures, improve the evidence review UI with links to flagged records, and
+deploy the server-backed frontend so `demo_url` can be supplied in the
+submission.
+
 Hi Manpreet Kaur,
 
 Thanks for registering for the Ivy Homes internship assignment.
