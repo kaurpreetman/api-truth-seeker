@@ -5,13 +5,20 @@ const API_BASE = "https://solve.ivy.homes";
 export const Route = createFileRoute("/api/ivy/$")({
   server: {
     handlers: {
-      ALL: async ({ request, params }) => {
+      GET: async ({ request, params }) => proxy(request, params._splat),
+      POST: async ({ request, params }) => proxy(request, params._splat),
+      DELETE: async ({ request, params }) => proxy(request, params._splat),
+    },
+  },
+});
+
+async function proxy(request: Request, splat: string | undefined) {
         const apiKey = process.env["IVY_API_KEY"];
         if (!apiKey) {
           return Response.json({ detail: "The property service is not configured." }, { status: 500 });
         }
 
-        const path = params._splat ? `/${params._splat}` : "/";
+        const path = splat ? `/${splat}` : "/";
         const incomingUrl = new URL(request.url);
         const target = new URL(`${API_BASE}${path}`);
         target.search = incomingUrl.search;
@@ -35,7 +42,4 @@ export const Route = createFileRoute("/api/ivy/$")({
         const retryAfter = upstream.headers.get("retry-after");
         if (retryAfter) responseHeaders.set("Retry-After", retryAfter);
         return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
-      },
-    },
-  },
-});
+}

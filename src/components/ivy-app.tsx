@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Bookmark, Building2, ChevronDown, Compass, Home, LogOut, Menu, Search, Sparkles, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { clearStoredSession, initials, type IvySession } from "@/lib/ivy";
 

@@ -103,14 +103,19 @@ async function readResponse<T>(response: Response): Promise<T> {
 }
 
 export async function ivyRequest<T>(path: string, session: IvySession, init?: RequestInit) {
-  const response = await fetch(`/api/ivy${path}`, {
+  const request = (activeSession: IvySession) => fetch(`/api/ivy${path}`, {
     ...init,
     headers: {
       ...(init?.headers ?? {}),
-      Authorization: `Bearer ${session.accessToken}`,
+      Authorization: `Bearer ${activeSession.accessToken}`,
       "Content-Type": "application/json",
     },
   });
+  let response = await request(session);
+  if (response.status === 401 && session.refreshToken) {
+    const nextSession = await refresh(session);
+    response = await request(nextSession);
+  }
   return readResponse<T>(response);
 }
 
